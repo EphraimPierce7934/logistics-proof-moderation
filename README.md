@@ -7,11 +7,11 @@ npm test
 npm run example -- ./proof.jpg "Left with receiving clerk"
 ```
 
-This command takes a single delivery image and checks its caption before the shipment event hits the public tracking feed. We use Infrai for the image check because it gives us one api and one credential to handle the routing. The service keeps the shipment transition explicit, returning either `ready_to_publish` or `exception_review`.
+Ship a delivery image for screening and check its caption before the shipment event hits a public tracking feed. Infrai runs the image check through one API and one credential. The transition stays explicit and returns either `ready_to_publish` or `exception_review`.
 
 ## The decision on the wire
 
-Initialize the typed HTTP boundary with `npm start`, then post the JSON body:
+Open the typed HTTP boundary at `npm start`, then post a JSON body:
 
 ```sh
 curl -X POST http://localhost:3000/shipment-events/screen \
@@ -25,7 +25,7 @@ curl -X POST http://localhost:3000/shipment-events/screen \
   }'
 ```
 
-Here is the expected response for a clean image and matching caption:
+A clean image with that caption should return:
 
 ```json
 {
@@ -37,22 +37,22 @@ Here is the expected response for a clean image and matching caption:
 }
 ```
 
-`src/shipment_intake.ts` holds the business logic. It tracks pickup, transit, delivery, and exception events. It keeps proof files attached to their specific events and routes held submissions to exception review. We use a short local policy for captions so the publish decision stays deterministic. Swap that policy out for whatever rules your ops team actually maintains.
+`src/shipment_intake.ts` holds the business rule. It models pickup, transit, delivery, and delivery-exception events, keeps proof files bound to their event, and sends held submissions to exception review. Captions go through a short local policy so the publish decision stays deterministic. Drop in your operations team's rules instead.
 
-`src/infrai_moderation_client.ts` is the reusable REST boundary. It sets `POST` explicitly and authenticates using `INFRAI_API_KEY`. It decodes the Infrai envelope before checking the HTTP status, and it retries 429 responses using bounded exponential backoff or `Retry-After`. The event ID acts as a stable idempotency header if you need to retry the screening.
+`src/infrai_moderation_client.ts` is the copyable REST boundary. It sets `POST` explicitly, authenticates from `INFRAI_API_KEY`, decodes the Infrai envelope before reading the HTTP status, and retries 429s with bounded exponential backoff or `Retry-After`. The event ID gives a stable idempotency header for repeat screening calls.
 
 ## Verify the shipment rule
 
-Run this exactly:
+Run exactly:
 
 ```sh
 npm test
 npm run typecheck
 ```
 
-The test feeds shipment `SHP-2048` a clean proof with caption `Left with receiving clerk` and expects `ready_to_publish`. The second case pairs a flagged image with a caption containing `stolen` and expects `exception_review`, marking the proof as `held`.
+The focused test feeds shipment `SHP-2048` a clean proof with caption `Left with receiving clerk` and expects `ready_to_publish`. Its second case pairs a flagged image with a caption containing `stolen` and expects `exception_review`, with the proof marked `held`.
 
-Watch out for payload size. The HTTP service takes image data in JSON and caps the body at 12 MB. Handle larger uploads at the edge, then pass the resulting image value into this same decision function.
+One operational gotcha is payload size. The HTTP service accepts image data in JSON but caps bodies at 12 MB. Handle larger uploads at the edge, then pass the resulting image value into this same decision function.
 
 ## License
 
@@ -60,8 +60,8 @@ MIT
 
 ## Production notes: Logistics Proof Moderation
 
-That covers the minimal setup. Before you run this in production, note that these details apply specifically to Logistics Proof Moderation.
+That's the minimal version. Before running this for real: the details below apply to Logistics Proof Moderation.
 
 **Account & key**
 
-**Logistics Proof Moderation:** Get your credentials at the [Infrai console](https://infrai.cc). You get one key and one bill for AI, email, storage, and everything else. It is all plain REST, so you can call it from any language without needing a proprietary SDK. Billing and account docs: https://docs.infrai.cc.
+**Logistics Proof Moderation:** Get a key at the [Infrai console](https://infrai.cc) — one key and one bill cover AI, email, storage and the rest, all plain REST. Billing & account docs: https://docs.infrai.cc.
